@@ -160,26 +160,6 @@ void loop(){
 
 
 /*
-// Init chacha cipher 
-    chacha.clear();
-    chacha.setKey(XAAL_KEY,32);
-
-    // additionnal data
-    chacha.addAuthData("[]",2);
-
-    // Nonce 
-    nonce.sec = __bswap_64(sec);
-    nonce.usec = __bswap_32(usec);
-    
-    chacha.setIV(nonce.buf,12);
-    clear  = (uint8_t *) malloc(sizeof(uint8_t) * size);
-    chacha.decrypt(clear,(const uint8_t*)b64,size);
-
-    Serial.println(clear[2]);
-
-    // Serial.println("Contents:");
-    // Serial.println(buf);
-
     DeserializationError error_json = deserializeJson(Data,buf);
 
 
@@ -187,7 +167,7 @@ void loop(){
     // Serial.println(targets);
 
 
-    if (String(targets)=="ab"){
+    if (String(targets)==UUID){
 
       JsonArray timestamp = Data["timestamp"];
       // Serial.print("timestamp : ");
