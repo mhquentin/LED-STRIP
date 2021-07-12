@@ -71,7 +71,9 @@ void setup()
 
 class Message {
   public:
-    char          version;
+    int           version;
+    long          time;
+    long          timestamp2;
     char          targets;
     const uint8_t *source;
     const char    *dev_type;
@@ -90,6 +92,7 @@ void loop(){
   // size_t free8start, free32start;
 
   char buf[1024];
+  Message msg = Message();
 
   nonce_t nonce;
   unsigned long sec,usec;
@@ -120,14 +123,38 @@ void loop(){
     if (len > 0) {
       buf[len] = 0;}
 
-    CBOR cbor_data = CBOR((uint8_t *)buf, 1024);
+    CBOR cbor_data = CBOR((uint8_t *)buf, len);
+
+    msg.version=(int)cbor_data[0];
+    msg.time = (long)cbor_data[1];
+    msg.timestamp2 = (long)cbor_data[2];
+
+    const uint8_t* ciph;
+    ciph = cbor_data[4];
 
     Serial.println("MESSAGE");
-    Serial.println(typeof(cbor_data));
-    Serial.println((char )cbor_data[4]);
-    Serial.println((char *)&cbor_data);
-    //Serial.println(cbor_data["lat"]);
-  //  CBOR targets = buf[3];
+    Serial.println((String)"Version : "+msg.version);
+    Serial.println((String)"Time : "+msg.time);
+    Serial.println((String)"Timestamp : "+msg.time+" , "+msg.timestamp2);
+
+    // Init chacha cipher 
+    chacha.clear();
+    chacha.setKey(XAAL_KEY,32);
+
+    // additionnal data
+    chacha.addAuthData("[]",2);
+
+    // Nonce 
+    nonce.sec = __bswap_64(sec);
+    nonce.usec = __bswap_32(usec);
+    
+    chacha.setIV(nonce.buf,12);
+    clear  = (uint8_t *) malloc(sizeof(uint8_t) * size);
+    chacha.decrypt(clear,ciph,size);
+
+    CBOR payload = CBOR(clear, size);
+
+
   }
 }
 
