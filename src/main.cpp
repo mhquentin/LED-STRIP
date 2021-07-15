@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <EEPROM.h>
-
+#include <string>
 #include <config.h>
 #include <YACL.h>
 #include <WiFi.h>
@@ -95,12 +95,10 @@ void loop(){
   Message msg = Message();
 
   nonce_t nonce;
-  unsigned long sec,usec;
-  int b64_len;
-  char *b64;
+  unsigned long long sec;
+  unsigned long usec;
   uint8_t *clear; 
   uint16_t size;
-  base64_decodestate b64_state;
 
    if (WiFi.status() != WL_CONNECTED) {
     Serial.print("# Error: no network\n");
@@ -110,14 +108,6 @@ void loop(){
   
   int packetSize = mcast.parsePacket();
   if (packetSize) {
-    // size_t x = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    // printf("Free_heap %d : %d\n",i, x );
-
-    // free8start = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-    // free32start = heap_caps_get_free_size(MALLOC_CAP_32BIT);
-    // Serial.printf("Free 8bit-capable memory (start): %dK, 32-bit capable memory %dK\n", free8start, free32start);
-
-    // read the packet into packetBufffer
     
     int len =  mcast.read((char *) &buf,1024);
     if (len > 0) {
@@ -125,12 +115,16 @@ void loop(){
 
     CBOR cbor_data = CBOR((uint8_t *)buf, len);
 
-    msg.version=(int)cbor_data[0];
+    msg.version = (int)cbor_data[0];
     msg.time = (long)cbor_data[1];
-    msg.timestamp2 = (long)cbor_data[2];
+    msg.timestamp2 = (long)cbor_data[2];    
 
-    const uint8_t* ciph;
-    ciph = cbor_data[4];
+    sec = msg.time;
+    usec = msg.timestamp2;
+
+    size_t ciph_len= (cbor_data[4]).length();
+	  uint8_t ciph[ciph_len] = {0x00};
+    cbor_data[4].get_bytestring(ciph);
 
     Serial.println("MESSAGE");
     Serial.println((String)"Version : "+msg.version);
@@ -149,14 +143,42 @@ void loop(){
     nonce.usec = __bswap_32(usec);
     
     chacha.setIV(nonce.buf,12);
+
+    size = len - IETF_ABITES;
+
     clear  = (uint8_t *) malloc(sizeof(uint8_t) * size);
-    chacha.decrypt(clear,ciph,size);
+    chacha.decrypt(clear,(const uint8_t *)ciph,size);
 
     CBOR payload = CBOR(clear, size);
 
+    size_t pld3= (payload[3]).length();
+    uint8_t actionmsg[pld3] = {0x00};
+    payload[3].get_bytestring(actionmsg);
 
+    size_t pld1= (payload[1]).length();
+    uint8_t devmsg[pld1] = {0x00};
+    payload[1].get_bytestring(devmsg);
+
+    //uint8_t sourcemsg[100] = {0x00};
+    //payload[0].get_bytestring(sourcemsg);
+
+    msg.dev_type = (const char *)devmsg;
+    msg.msg_type = (int)payload[2];
+    msg.action = (const char *)actionmsg;
+    msg.source = (const uint8_t *)sourcemsg;
+
+    //Serial.println(payload.length()); 
+    
+    Serial.println("PAYLOAD");
+    Serial.println((String)"DevType : "+msg.dev_type);
+    Serial.println((String)"MsgType : "+msg.msg_type);
+    Serial.println((String)"Action : "+msg.action);
+  //  Serial.println((String)"Source : "+msg.source);
   }
 }
+
+
+
 
 
 /*
