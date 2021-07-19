@@ -74,7 +74,7 @@ class Message {
     int           version;
     long          time;
     long          timestamp2;
-    char          targets;
+    uint8_t targets[16]={};
     const uint8_t *source;
     const char    *dev_type;
     int            msg_type = 0; // default is NOTIFY
@@ -85,6 +85,17 @@ class Message {
 
 Message::Message(){
 }
+
+void hexdump(const uint8_t *buf,int size) {
+  Serial.print("[");
+  for (size_t i=0 ; i < size ; ++i) {
+    Serial.print("0x");
+      Serial.print(buf[i], HEX);
+    Serial.print(",");
+    }
+  Serial.print("]");
+}
+
 
 
 void loop(){
@@ -122,14 +133,19 @@ void loop(){
     sec = msg.time;
     usec = msg.timestamp2;
 
+    size_t targets_len= (cbor_data[3]).length();
+	  uint8_t data_targets[targets_len] = {};
+    cbor_data[3].get_bytestring(data_targets);
+
     size_t ciph_len= (cbor_data[4]).length();
-	  uint8_t ciph[ciph_len] = {0x00};
+	  uint8_t ciph[ciph_len] = {};
     cbor_data[4].get_bytestring(ciph);
 
     Serial.println("MESSAGE");
     Serial.println((String)"Version : "+msg.version);
     Serial.println((String)"Time : "+msg.time);
     Serial.println((String)"Timestamp : "+msg.time+" , "+msg.timestamp2);
+    hexdump(data_targets,targets_len);
 
     // Init chacha cipher 
     chacha.clear();
@@ -152,138 +168,66 @@ void loop(){
     CBOR payload = CBOR(clear, size);
 
     size_t pld3= (payload[3]).length();
-    uint8_t actionmsg[pld3] = {0x00};
+    uint8_t actionmsg[pld3] = {};
     payload[3].get_bytestring(actionmsg);
 
     size_t pld1= (payload[1]).length();
-    uint8_t devmsg[pld1] = {0x00};
+    uint8_t devmsg[pld1] = {};
     payload[1].get_bytestring(devmsg);
+    
+    size_t source_len= (payload[0]).length();
+	  uint8_t data_source[source_len] = {};;
+    payload[0].get_bytestring(data_source);
 
-    //uint8_t sourcemsg[100] = {0x00};
-    //payload[0].get_bytestring(sourcemsg);
+    
+
 
     msg.dev_type = (const char *)devmsg;
     msg.msg_type = (int)payload[2];
     msg.action = (const char *)actionmsg;
-    msg.source = (const uint8_t *)sourcemsg;
+    //msg.source = (const uint8_t *)sourcemsg;
 
-    //Serial.println(payload.length()); 
+    CBORPair cbor_dict = CBORPair();
+    
+    //Serial.println(payload[4].length()>0);
+    //Serial.println(payload[4].length());
+    //payload[4].get_string
+    if (payload[4].length()>0){
+     /* msg.body = (CBORPair)payload[4];
+      Serial.println("ok");
+      //cbor_dict = (CBORPair)payload[4];
+      
+      char key[(msg.body).length()] = {};
+      char value[(msg.body).length()] = {};
+      for (size_t i=0 ; i < msg.body.n_elements() ; ++i) {
+        CBOR cbor_key = msg.body.key_at(i);
+        CBOR cbor_val = msg.body.at(i); //or cbor_val[cbor_dict.key_at(i)] (slower in this context)
+        cbor_key.get_string(key);
+        cbor_val.get_string(value);  
+      Serial.println(key);
+      Serial.println(value);
+     }*/
+    }
+
+    payload[3].get_bytestring(actionmsg);
     
     Serial.println("PAYLOAD");
     Serial.println((String)"DevType : "+msg.dev_type);
     Serial.println((String)"MsgType : "+msg.msg_type);
     Serial.println((String)"Action : "+msg.action);
-  //  Serial.println((String)"Source : "+msg.source);
+    hexdump(data_source,source_len);
+
+    for (int i=2 ; i < 18 ; ++i) {
+      msg.targets[i-2]=data_targets[i];
+      hexdump(msg.targets,sizeof(msg.targets));
+    }
+    hexdump(msg.targets,targets_len);
+
+    if (msg.targets == UUID){
+      Serial.println("TARGET VALIDE");
+    }
+
+    Serial.println("\n");
+    free(clear);
   }
 }
-
-
-
-
-
-/*
-    DeserializationError error_json = deserializeJson(Data,buf);
-
-
-    // Serial.print("targets : ");
-    // Serial.println(targets);
-
-
-    if (String(targets)==UUID){
-
-      JsonArray timestamp = Data["timestamp"];
-      // Serial.print("timestamp : ");
-      sec = timestamp[0];
-      usec = timestamp[1];
-      // Serial.print(sec);
-      // Serial.print(" , ");
-      // Serial.println(usec);
-    
-    //   // let's base64 decode the payload
-      
-      const char* payload = Data["payload"];
-      size = strlen(payload) ;
-      b64_len = ((size+1)*6)/8 ; // base64_decode_expected_len(size)+1; 
-      b64 = (char *) malloc(b64_len);
-      base64_init_decodestate(&b64_state);
-      b64_len = base64_decode_block(payload, size, b64, &b64_state);
-      
-      size = b64_len - IETF_ABITES ; 
-
-      // Init chacha cipher 
-      chacha.clear();
-      chacha.setKey(XAAL_KEY,32);
-
-      // additionnal data
-      chacha.addAuthData("[]",2);
-
-      // Nonce 
-      nonce.sec = __bswap_64(sec);
-      nonce.usec = __bswap_32(usec);
-    
-      chacha.setIV(nonce.buf,12);
-      clear  = (uint8_t *) malloc(sizeof(uint8_t) * size);
-      chacha.decrypt(clear,(const uint8_t*)b64,size);
-
-      // printf("%d\n",clear);
-      deserializeJson(Data_Payload,clear);
-
-      header = Data_Payload["header"];
-
-      Serial.print("{header:  ");
-      const char*  source = header["source"]; //header
-      Serial.print("source : ");
-      Serial.printf(source);
-
-      const char*  msgType = header["msgType"]; //msgType
-      Serial.print("  msgType : ");
-      Serial.printf(msgType);
-
-      const char*  devType = header["devType"]; //devType
-      Serial.print("  devType : ");
-      Serial.printf(devType);
-
-      const char*  action = header["action"]; //action
-      Serial.print("  action : ");
-      Serial.printf(action);
-      Serial.print(" } ");
-
-      Serial.printf("\n");
-
-
-      if ( header["action"] == "on" ) {
-        digitalWrite(ledPin1, HIGH);   
-    
-      }
-      else if ( header["action"] == "off" ) {
-        digitalWrite(ledPin1,LOW);
-      }
-
-
-      free(clear);
-      free(b64);
-
-      header.clear();
-      Data_Payload.clear();
-      */
-
-      // printf("Free_heap:%d\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-
-
-
-    //   // free8 = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-    //   // free32 = heap_caps_get_free_size(MALLOC_CAP_32BIT);
-    //   // printf("Free 8bit-capable memory (both reduced): %dK, 32-bit capable memory %dK\n", free8, free32);
-
-    //}
-    // printf("Free_heap:%d - %d\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL),i);
-    // size_t y = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    // printf("Free_heap %d : %d\n",i, y );
-
-    // printf("difference : %d\n",y-x);
-    // i++;
-    
-    //Data.clear();
-
-  //}}
-
