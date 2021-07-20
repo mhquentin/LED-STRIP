@@ -137,6 +137,15 @@ void loop(){
 	  uint8_t data_targets[targets_len] = {};
     cbor_data[3].get_bytestring(data_targets);
 
+    CBOR targets =CBOR((uint8_t *)data_targets,sizeof(data_targets));
+    uint8_t data[targets.length()]={};
+    for (int i=0 ; i < 16 ; ++i) {
+      targets[i].get_bytestring(data);
+      Serial.print(*data);
+      msg.targets[i]=*data;
+    }
+
+
     size_t ciph_len= (cbor_data[4]).length();
 	  uint8_t ciph[ciph_len] = {};
     cbor_data[4].get_bytestring(ciph);
@@ -145,7 +154,13 @@ void loop(){
     Serial.println((String)"Version : "+msg.version);
     Serial.println((String)"Time : "+msg.time);
     Serial.println((String)"Timestamp : "+msg.time+" , "+msg.timestamp2);
-    hexdump(data_targets,targets_len);
+    Serial.print("Target : ");
+    Serial.print("[");
+    for (size_t i=0 ; i < 15 ; ++i) {
+      Serial.print(msg.targets[i]);
+    }
+  Serial.println("]");
+
 
     // Init chacha cipher 
     chacha.clear();
@@ -186,8 +201,6 @@ void loop(){
     msg.msg_type = (int)payload[2];
     msg.action = (const char *)actionmsg;
     //msg.source = (const uint8_t *)sourcemsg;
-
-    CBORPair cbor_dict = CBORPair();
     
     //Serial.println(payload[4].length()>0);
     //Serial.println(payload[4].length());
@@ -211,19 +224,21 @@ void loop(){
 
     payload[3].get_bytestring(actionmsg);
     
-    Serial.println("PAYLOAD");
+    Serial.println("\nPAYLOAD");
     Serial.println((String)"DevType : "+msg.dev_type);
     Serial.println((String)"MsgType : "+msg.msg_type);
     Serial.println((String)"Action : "+msg.action);
-    hexdump(data_source,source_len);
 
-    for (int i=2 ; i < 18 ; ++i) {
-      msg.targets[i-2]=data_targets[i];
-      hexdump(msg.targets,sizeof(msg.targets));
-    }
-    hexdump(msg.targets,targets_len);
 
-    if (msg.targets == UUID){
+    /*Serial.println("-----");
+    hexdump(msg.targets,sizeof(msg.targets));
+    hexdump(UUID, sizeof(UUID));
+    Serial.println("-----");*/
+
+    const uint8_t UUID2[] = {0x14,0xe0,0x56,0x92,0xd4,0xbf,0x11,0xeb,0x8d,0x10,0x08,0x00,0x27,0x2e,0xac,0xd7,};
+
+
+    if (msg.targets == UUID2){
       Serial.println("TARGET VALIDE");
     }
 
@@ -231,3 +246,4 @@ void loop(){
     free(clear);
   }
 }
+
